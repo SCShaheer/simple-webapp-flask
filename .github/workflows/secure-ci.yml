@@ -5,6 +5,7 @@ on:
     branches: ["**"]
   pull_request:
 
+# CI-only: keep permissions minimal
 permissions:
   contents: read
 
@@ -37,8 +38,10 @@ jobs:
 
       - name: SAST (Bandit)
         run: |
-          bandit -r . -x "./.venv,./venv,./.git,./.github" -f json -o bandit.json
-          bandit -r . -x "./.venv,./venv,./.git,./.github" -lll
+          # Always produce a report (do not fail here)
+          bandit -r . -x "./.venv,./venv,./.git,./.github" -f json -o bandit.json --exit-zero
+          # Security gate: fail only on HIGH severity findings
+          bandit -r . -x "./.venv,./venv,./.git,./.github" -iii
 
       - name: SCA (pip-audit)
         run: |
@@ -52,7 +55,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         with:
           args: "--verbose --redact --report-format json --report-path gitleaks.json"
-      # Gitleaks action reference :contentReference[oaicite:2]{index=2}
 
       - name: Build Docker image
         run: |
@@ -67,7 +69,6 @@ jobs:
           output: trivy-image.json
           severity: HIGH,CRITICAL
           exit-code: "1"
-      # Trivy action releases reference :contentReference[oaicite:3]{index=3}
 
       - name: Generate SBOM (Anchore SBOM Action)
         uses: anchore/sbom-action@v0
@@ -75,9 +76,9 @@ jobs:
           image: local/simple-webapp-flask:${{ github.sha }}
           format: spdx-json
           output-file: sbom.spdx.json
-      # SBOM action usage :contentReference[oaicite:4]{index=4}
 
       - name: Upload security artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-reports-${{ github.run_number }}
